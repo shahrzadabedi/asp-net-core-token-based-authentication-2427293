@@ -113,7 +113,29 @@ namespace SchoolApp.API.Controllers
             var result = await VerifyAndGenerateTokenAsync(tokenRequestVM);
             return Ok(result);
         }
+        
+        [HttpPost("invalidate-refresh-token")]
+        public async Task<IActionResult> InvalidateRefreshToken([FromBody] TokenRequestVM tokenRequestVM)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest("Please, provide all required fields");
+            }
+            var result  = await InvalidateRefreshToken(tokenRequestVM.RefreshToken);
+            return Ok(result);
+        }
+        private async Task<InvalidateRefreshTokenResultVM> InvalidateRefreshToken(string token)
+        {
+            var storedToken = await _context.RefreshTokens.FirstOrDefaultAsync(x => x.Token == token);
+            if  (storedToken == null)
+            {
+                return new InvalidateRefreshTokenResultVM() { RefreshToekn = token, Success = false };
+            }
+            storedToken.IsRevoked = true;            
+            await _context.SaveChangesAsync();
+            return new InvalidateRefreshTokenResultVM() { RefreshToekn = token, Success = true};
 
+        }
         private async Task<AuthResultVM> VerifyAndGenerateTokenAsync(TokenRequestVM tokenRequestVM)
         {
             var jwtTokenHandler = new JwtSecurityTokenHandler();
@@ -128,7 +150,7 @@ namespace SchoolApp.API.Controllers
             }
             catch (SecurityTokenExpiredException)
             {
-                if(storedToken.DateExpire >= DateTime.UtcNow)
+                if(storedToken.DateExpire >= DateTime.UtcNow && !storedToken.IsRevoked)
                 {
                     return await GenerateJWTTokenAsync(dbUser, storedToken);
                 } else
